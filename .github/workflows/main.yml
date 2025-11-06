@@ -1,15 +1,28 @@
 # From https://github.com/League-of-Foundry-Developers/FoundryVTT-Module-Template/blob/master/.github/workflows/main.yml
 name: Release Creation
 
-on: 
+on:
   release:
-    types: [published]
+    types: [published, edited]
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+      - '*.*.*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+
+    - name: Compute tag name
+      id: vars
+      shell: bash
+      run: |
+        TAG="${{ github.event.release.tag_name }}"
+        if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME}"; fi
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
 
     #Substitute the Manifest and Download URLs in the module.json
     - name: Substitute Manifest and Download Links For Versioned Ones
@@ -18,9 +31,9 @@ jobs:
       with:
         files: 'module.json'
       env:
-        version: ${{github.event.release.tag_name}}
-        manifest: https://github.com/${{github.repository}}/releases/latest/download/module.json
-        download: https://github.com/${{github.repository}}/releases/download/${{github.event.release.tag_name}}/module.zip
+        version: ${{ steps.vars.outputs.tag }}
+        manifest: https://github.com/${{ github.repository }}/releases/latest/download/module.json
+        download: https://github.com/${{ github.repository }}/releases/download/${{ steps.vars.outputs.tag }}/module.zip
 
     # create a zip file with all files required by the module to add to the release
     - run: zip -r ./module.zip . -x@.github/zip-exclude.lst
@@ -31,19 +44,19 @@ jobs:
       uses: ncipollo/release-action@v1
       with:
         allowUpdates: true # set this to false if you want to prevent updating existing releases
-        name: ${{ github.event.release.name }}
+        name: ${{ github.event.release.name || steps.vars.outputs.tag }}
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
         artifacts: './module.json, ./module.zip'
-        tag: ${{ github.event.release.tag_name }}
+        tag: ${{ steps.vars.outputs.tag }}
         body: ${{ github.event.release.body }}
 
     # Update the 'latest' release
     - name: Create Release
       id: create_latest_release
       uses: ncipollo/release-action@v1
-      if: endsWith(github.ref, 'master')
+      if: endsWith(github.ref, 'main') || endsWith(github.ref, 'master')
       with:
         allowUpdates: true
         name: Latest
