@@ -41,6 +41,20 @@ export default function registerHooks() {
         registerSettings();
         overrideMethods();
         preloadHandlebarsTemplates();
+        // Optional keybinding to toggle carousel
+        try {
+            game.keybindings?.register?.(NAME, "toggleCarousel", {
+                name: "Toggle Combat Carousel",
+                editable: [{ key: "KeyC", modifiers: ["Alt"] }],
+                onDown: () => {
+                    const app = ui.combatCarousel;
+                    if (!app) return true;
+                    if (app._collapsed) app.expand(); else app.collapse();
+                    game.settings.set(NAME, SETTING_KEYS.collapsed, !app._collapsed);
+                    return true;
+                }
+            });
+        } catch (e) { /* keybindings may not exist on some versions */ }
     }); 
 
     /**
@@ -72,10 +86,12 @@ export default function registerHooks() {
         if (collapseNavSetting) ui.nav.collapse();
 
         const hasTurns = combat?.turns?.length;
-        const controlsRoot = getControlsRoot();
-        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
-        const newImgSrc = hasTurns ? CAROUSEL_ICONS.hasTurns : CAROUSEL_ICONS.noTurns;
-        if (carouselImg) carouselImg.src = newImgSrc;
+        if (game.settings.get(NAME, SETTING_KEYS.showToolbarButton)) {
+            const controlsRoot = getControlsRoot();
+            const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+            const newImgSrc = hasTurns ? CAROUSEL_ICONS.hasTurns : CAROUSEL_ICONS.noTurns;
+            if (carouselImg) carouselImg.src = newImgSrc;
+        }
     });
 
     /**
@@ -129,9 +145,11 @@ export default function registerHooks() {
             //ui.combatCarousel.collapse();
         }
 
-        const controlsRoot = getControlsRoot();
-        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
-        if (carouselImg) carouselImg.src = CAROUSEL_ICONS.noCombat;
+        if (game.settings.get(NAME, SETTING_KEYS.showToolbarButton)) {
+            const controlsRoot = getControlsRoot();
+            const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+            if (carouselImg) carouselImg.src = CAROUSEL_ICONS.noCombat;
+        }
     });
     
     /* ----------------- Combatant ---------------- */
@@ -228,9 +246,11 @@ export default function registerHooks() {
 
         const combatHasTurns = combat?.turns?.length;
 
-        const controlsRoot = getControlsRoot();
-        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
-        if (!combatHasTurns && carouselImg) carouselImg.setAttribute("src", CAROUSEL_ICONS.noTurns);
+        if (game.settings.get(NAME, SETTING_KEYS.showToolbarButton)) {
+            const controlsRoot = getControlsRoot();
+            const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+            if (!combatHasTurns && carouselImg) carouselImg.setAttribute("src", CAROUSEL_ICONS.noTurns);
+        }
     });
 
     /* ------------------- Actor ------------------ */
@@ -338,7 +358,9 @@ export default function registerHooks() {
             ui.combatCarousel.render(true);
         }
 
-        ui?.combatCarousel?.setToggleIcon();
+        if (game.settings.get(NAME, SETTING_KEYS.showToolbarButton)) {
+            ui?.combatCarousel?.setToggleIcon();
+        }
         //console.log("combat tracker rendered:", app, html, data);
     });
 
@@ -470,8 +492,9 @@ export default function registerHooks() {
      */
     Hooks.on("renderSceneControls", async (app, html, data) => {
         const enabled = game.settings.get(NAME, SETTING_KEYS.enabled);
+        const showToolbar = game.settings.get(NAME, SETTING_KEYS.showToolbarButton);
 
-        if (!enabled) return;
+        if (!enabled || !showToolbar) return;
 
         return CombatCarousel._onRenderSceneControls(app, html, data);
     });

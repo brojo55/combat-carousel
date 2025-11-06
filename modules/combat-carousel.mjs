@@ -361,6 +361,21 @@ export default class CombatCarousel extends Application {
      */
     activateListeners(html) {
         super.activateListeners(html);
+        const root = html?.jquery ? html[0] : html;
+        const toggle = root?.querySelector?.('.carousel-toggle');
+        if (toggle) {
+            toggle.addEventListener('click', async (ev) => {
+                ev.preventDefault();
+                const collapsed = this._collapsed === true;
+                if (collapsed) await this.expand(); else await this.collapse();
+                await game.settings.set(NAME, SETTING_KEYS.collapsed, !collapsed);
+                this._updateHeaderToggleIcon();
+            });
+            toggle.addEventListener('contextmenu', (ev) => {
+                ev.preventDefault();
+                try { new CombatCarouselConfig().render(true); } catch (e) {}
+            });
+        }
 
         const app = html;
         const header = html.find("header");
@@ -1040,6 +1055,9 @@ export default class CombatCarousel extends Application {
             no: () => {},
             defaultYes: false
         });
+
+        // Sync header toggle icon with current collapsed state
+        this._updateHeaderToggleIcon();
     }
 
     /* -------------------------------------------- */
@@ -1059,28 +1077,19 @@ export default class CombatCarousel extends Application {
      * Toggles visibility of the carousel
      */
     async toggleVisibility(forceCollapse=false) {
-        const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
-        const indicator = controlsRoot?.querySelector("i.collapse-indicator");
-
         const el = this.element?.jquery ? this.element[0] : this.element;
         if (!el) return true;
 
-        const setIndicator = (dir) => {
-            if (!indicator) return;
-            indicator.classList.remove("fa-caret-down", "fa-caret-up");
-            indicator.classList.add(dir === "up" ? "fa-caret-up" : "fa-caret-down");
-        };
-
         return new Promise(resolve => {
             if (forceCollapse) {
-                if (this.element?.slideUp) this.element.slideUp(200, () => { setIndicator("down"); this._collapsed = true; resolve(true); });
-                else { el.style.display = "none"; setIndicator("down"); this._collapsed = true; resolve(true); }
+                if (this.element?.slideUp) this.element.slideUp(200, () => { this._collapsed = true; this._updateHeaderToggleIcon(); resolve(true); });
+                else { el.style.display = "none"; this._collapsed = true; this._updateHeaderToggleIcon(); resolve(true); }
                 return;
             }
 
             const hidden = getComputedStyle(el).display === "none";
-            if (this.element?.slideToggle) this.element.slideToggle(200, () => { setIndicator(hidden ? "up" : "down"); this._collapsed = !hidden; resolve(true); });
-            else { el.style.display = hidden ? "" : "none"; setIndicator(hidden ? "up" : "down"); this._collapsed = !hidden; resolve(true); }
+            if (this.element?.slideToggle) this.element.slideToggle(200, () => { this._collapsed = !hidden; this._updateHeaderToggleIcon(); resolve(true); });
+            else { el.style.display = hidden ? "" : "none"; this._collapsed = !hidden; this._updateHeaderToggleIcon(); resolve(true); }
         });
     }
 
@@ -1090,10 +1099,8 @@ export default class CombatCarousel extends Application {
     async expand() {
         return new Promise(resolve => {
             const el = this.element?.jquery ? this.element[0] : this.element;
-            const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
-            const indicator = controlsRoot?.querySelector("i.collapse-indicator");
-            if (this.element?.slideDown) this.element.slideDown(200, () => { this._collapsed = false; indicator?.classList?.remove("fa-caret-down"); indicator?.classList?.add("fa-caret-up"); resolve(true); });
-            else { if (el) el.style.display = ""; this._collapsed = false; indicator?.classList?.remove("fa-caret-down"); indicator?.classList?.add("fa-caret-up"); resolve(true); }
+            if (this.element?.slideDown) this.element.slideDown(200, () => { this._collapsed = false; this._updateHeaderToggleIcon(); resolve(true); });
+            else { if (el) el.style.display = ""; this._collapsed = false; this._updateHeaderToggleIcon(); resolve(true); }
         });
     }
 
@@ -1103,10 +1110,8 @@ export default class CombatCarousel extends Application {
     async collapse() {
         return new Promise(resolve => {
             const el = this.element?.jquery ? this.element[0] : this.element;
-            const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
-            const indicator = controlsRoot?.querySelector("i.collapse-indicator");
-            if (this.element?.slideUp) this.element.slideUp(200, () => { this._collapsed = true; indicator?.classList?.remove("fa-caret-up"); indicator?.classList?.add("fa-caret-down"); resolve(true); });
-            else { if (el) el.style.display = "none"; this._collapsed = true; indicator?.classList?.remove("fa-caret-up"); indicator?.classList?.add("fa-caret-down"); resolve(true); }
+            if (this.element?.slideUp) this.element.slideUp(200, () => { this._collapsed = true; this._updateHeaderToggleIcon(); resolve(true); });
+            else { if (el) el.style.display = "none"; this._collapsed = true; this._updateHeaderToggleIcon(); resolve(true); }
         });
     }
 
@@ -1140,11 +1145,13 @@ export default class CombatCarousel extends Application {
      * @param {String} combatState
      */
     setToggleIcon(combatState=null) {
+        try {
+            const showToolbar = game.settings.get(NAME, SETTING_KEYS.showToolbarButton);
+            if (!showToolbar) return;
+        } catch (e) { return; }
         const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
         const icon = controlsRoot?.querySelector?.(".carousel-icon");
-        const img = icon?.getAttribute?.("src");
         combatState = combatState ? combatState : CombatCarousel.getCombatState(game?.combat);
-
         if (icon) icon.setAttribute("src", CAROUSEL_ICONS[combatState]);
     }
 
@@ -1691,10 +1698,13 @@ export default class CombatCarousel extends Application {
      * Set the indicator on the toggle button
      */
     setToggleIconIndicator(state) {
+        try {
+            const showToolbar = game.settings.get(NAME, SETTING_KEYS.showToolbarButton);
+            if (!showToolbar) return;
+        } catch (e) { return; }
         const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
         const indicator = controlsRoot?.querySelector("li[data-control='combat-carousel'] i.collapse-indicator");
         if (!state || !indicator) return;
-        const currentDown = indicator.classList.contains("fa-caret-down");
         const desiredUp = state === "open";
         if (desiredUp) {
             indicator.classList.remove("fa-caret-down");
@@ -1703,6 +1713,14 @@ export default class CombatCarousel extends Application {
             indicator.classList.remove("fa-caret-up");
             indicator.classList.add("fa-caret-down");
         }
+    }
+
+    _updateHeaderToggleIcon() {
+        const el = this.element?.jquery ? this.element[0] : this.element;
+        const icon = el?.querySelector?.('.carousel-toggle i');
+        if (!icon) return;
+        icon.classList.remove('fa-caret-up','fa-caret-down');
+        icon.classList.add(this._collapsed ? 'fa-caret-down' : 'fa-caret-up');
     }
 
     /**

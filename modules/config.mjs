@@ -39,6 +39,7 @@ export const SETTING_KEYS = {
     about: "about",
     appPosition: "appPosition",
     enabled: "enabled",
+    showToolbarButton: "showToolbarButton",
     overlayConfigMenu: "overlayConfigMenu",
     showOverlay: "showOverlay",
     overlayPermission: "overlayPermission",

@@ -59,8 +59,11 @@ export default function registerSettings() {
         config: true,
         onChange: async (s) => {
             if (s) {
-                const controlsHtml = ui.controls.element;
-                await CombatCarousel._onRenderSceneControls(null, controlsHtml, null);
+                const showToolbar = game.settings.get(NAME, SETTING_KEYS.showToolbarButton);
+                if (showToolbar && ui.controls?.element) {
+                    const controlsHtml = ui.controls.element;
+                    await CombatCarousel._onRenderSceneControls(null, controlsHtml, null);
+                }
                 return CombatCarousel._onReady();
             }
 
@@ -68,6 +71,27 @@ export default function registerSettings() {
                 if (ui.combatCarousel?.rendered) ui.combatCarousel.close();
                 const root = getControlsRoot();
                 const ccButton = root?.querySelector("li[data-control='combat-carousel']");
+                if (ccButton) ccButton.remove();
+            }
+        }
+    });
+
+    // Optional legacy toolbar button (Scene Controls)
+    game.settings.register(NAME, SETTING_KEYS.showToolbarButton, {
+        name: "Show toolbar button (legacy)",
+        hint: "Adds a button to Scene Controls; recommended only for versions prior to v13.",
+        scope: "client",
+        type: Boolean,
+        default: false,
+        config: true,
+        onChange: async (s) => {
+            const enabled = game.settings.get(NAME, SETTING_KEYS.enabled);
+            const root = getControlsRoot();
+            const ccButton = root?.querySelector("li[data-control='combat-carousel']");
+            if (!enabled) return;
+            if (s) {
+                if (ui.controls?.element) await CombatCarousel._onRenderSceneControls(null, ui.controls.element, null);
+            } else {
                 if (ccButton) ccButton.remove();
             }
         }
@@ -335,14 +359,11 @@ export default function registerSettings() {
     });
 
     game.settings.register(NAME, SETTING_KEYS.collapsed, {
-        name: "COMBAT_CAROUSEL.SETTINGS.CollapsedN",
-        hint: "COMBAT_CAROUSEL.SETTINGS.CollapsedH",
+        name: "Start Collapsed",
+        hint: "Start the Combat Carousel collapsed by default.",
         scope: "client",
         type: Boolean,
         default: false,
-        config: false,
-        onChange: s => {
-
-        }
+        config: true
     });
 }
