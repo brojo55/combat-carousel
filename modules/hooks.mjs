@@ -15,6 +15,20 @@ import { TEMPLATE_PATH } from "./config.mjs";
  * Registers hooks needed throughout the module
  */
 export default function registerHooks() {
+    // v13+ compatibility helpers
+    const FU = foundry?.utils ?? {};
+    const getProperty = FU.getProperty ?? (globalThis.getProperty || ((obj, path) => path.split('.').reduce((o,k)=>o?.[k], obj)));
+    const hasProperty = FU.hasProperty ?? (globalThis.hasProperty || ((obj, path) => {
+        const parts = path.split('.');
+        let o = obj;
+        for (const k of parts) { if (o && (k in o)) o = o[k]; else return false; }
+        return true;
+    }));
+    const getControlsRoot = () => {
+        const el = ui?.controls?.element;
+        if (!el) return null;
+        return el.jquery ? el[0] : el;
+    };
 
     /* -------------------------------------------- */
     /*                 System Hooks                 */
@@ -58,10 +72,10 @@ export default function registerHooks() {
         if (collapseNavSetting) ui.nav.collapse();
 
         const hasTurns = combat?.turns?.length;
-        const carouselImg = ui?.controls?.element.find("img.carousel-icon");
+        const controlsRoot = getControlsRoot();
+        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
         const newImgSrc = hasTurns ? CAROUSEL_ICONS.hasTurns : CAROUSEL_ICONS.noTurns;
-        
-        carouselImg.attr("src", newImgSrc);
+        if (carouselImg) carouselImg.src = newImgSrc;
     });
 
     /**
@@ -115,8 +129,9 @@ export default function registerHooks() {
             //ui.combatCarousel.collapse();
         }
 
-        const carouselImg = ui.controls.element.find("img.carousel-icon");
-        carouselImg.attr("src", CAROUSEL_ICONS.noCombat);
+        const controlsRoot = getControlsRoot();
+        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+        if (carouselImg) carouselImg.src = CAROUSEL_ICONS.noCombat;
     });
     
     /* ----------------- Combatant ---------------- */
@@ -158,9 +173,9 @@ export default function registerHooks() {
 
         ui.combatCarousel.render();
 
-        const carouselImg = ui.controls.element.find("img.carousel-icon");
-
-        if (carouselImg.attr("src") != CAROUSEL_ICONS.hasTurns) carouselImg.attr("src", CAROUSEL_ICONS.hasTurns);
+        const controlsRoot = getControlsRoot();
+        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+        if (carouselImg && carouselImg.getAttribute("src") !== CAROUSEL_ICONS.hasTurns) carouselImg.setAttribute("src", CAROUSEL_ICONS.hasTurns);
     });
     
     /**
@@ -213,9 +228,9 @@ export default function registerHooks() {
 
         const combatHasTurns = combat?.turns?.length;
 
-        const carouselImg = ui.controls.element.find("img.carousel-icon");
-
-        if (!combatHasTurns) carouselImg.attr("src", CAROUSEL_ICONS.noTurns);
+        const controlsRoot = getControlsRoot();
+        const carouselImg = controlsRoot?.querySelector("img.carousel-icon");
+        if (!combatHasTurns && carouselImg) carouselImg.setAttribute("src", CAROUSEL_ICONS.noTurns);
     });
 
     /* ------------------- Actor ------------------ */

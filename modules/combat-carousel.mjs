@@ -9,6 +9,13 @@ import FixedDraggable from "./fixed-draggable.mjs";
 import { toTitleCase } from "./util.mjs";
 import { getAllElementSiblings, getKeyByValue, getTokenFromCombatantId, getActorFromCombatantId } from "./util.mjs";
 
+// v13+ compatibility helpers
+const FU = foundry?.utils ?? {};
+const mergeObject = FU.mergeObject ?? (globalThis.mergeObject || ((a,b)=>Object.assign({}, a, b)));
+const duplicate = FU.duplicate ?? FU.deepClone ?? (globalThis.duplicate || ((o)=>JSON.parse(JSON.stringify(o))));
+const debounce = FU.debounce ?? globalThis.debounce;
+const getProperty = FU.getProperty ?? (globalThis.getProperty || ((obj, path) => path.split('.').reduce((o,k)=>o?.[k], obj)));
+
 /**
  * Main app class
  * @extends Application
@@ -48,7 +55,8 @@ export default class CombatCarousel extends Application {
         await super._render(force, options);
 
         // Instantiate the Fixed Draggable to make this app draggable
-        new FixedDraggable(this, this.element, this.element.find(".drag-handle")[0], this.options.resizeable, {onDragMouseUp: this._onDragEnd});
+        const dragHandle = this.element?.find ? this.element.find(".drag-handle")[0] : this.element?.querySelector?.(".drag-handle");
+        new FixedDraggable(this, (this.element?.jquery ? this.element[0] : this.element), dragHandle, this.options.resizeable, {onDragMouseUp: this._onDragEnd});
 
         const sizeSetting = game.settings.get(NAME, SETTING_KEYS.carouselSize);
         const scale = this.sizeFactor = sizeSetting ? DEFAULT_CONFIG.carouselSize.sizeScaleMap[sizeSetting] : 1;
@@ -56,7 +64,8 @@ export default class CombatCarousel extends Application {
         const alwaysOnTopSetting = game.settings.get(NAME, SETTING_KEYS.alwaysOnTop);
 
         if (alwaysOnTopSetting) {
-            this.element[0].style.zIndex = 100;
+            const el = this.element?.jquery ? this.element[0] : this.element;
+            if (el) el.style.zIndex = 100;
         }
 
         /**
@@ -85,8 +94,7 @@ export default class CombatCarousel extends Application {
          */
         this.splide.on("mounted", () => {
             const slides = this.slides = document.querySelectorAll(".splide__slide");
-            const $slides = $(slides);
-            const $track = this.element.find(".splide__track");
+            // jQuery-dependent vars are optional in v13+
 
             if (force) {
                 for (let i = 0; i < slides.length; i++) {
@@ -141,29 +149,44 @@ export default class CombatCarousel extends Application {
          * Handle adding a new combatant
          */
         this.splide.on("addCombatant", (element, index) => {
-            const $element = $(element);
-            
-            if (this.splide.length > 0) {
-                $element.addClass("fly");
-                $element.on("webkitAnimationEnd oanimationend msAnimationEnd animationend", (event) => {
-                    event.target.classList.remove("fly");
-                    event.target.style.animationDelay = null;
-                    //this.activateCombatantSlide();
-                });
+            // element may be HTML string; convert to Element for pre-insert decoration
+            let el;
+            if (typeof element === "string") {
+                const tmp = document.createElement("div");
+                tmp.innerHTML = element.trim();
+                el = tmp.firstElementChild;
+            } else {
+                el = element;
             }
 
-            const controlledTokens = canvas?.tokens?.controlled;
-            const controlledCombatants = game?.combat?.combatants?.filter(c => controlledTokens.some(t => c.token?.id === t.id));
-            const combatantId = $element.data().combatantId;
+            if (this.splide.length > 0 && el) {
+                el.classList.add("fly");
+                const onEnd = (event) => {
+                    event.target.classList.remove("fly");
+                    event.target.style.animationDelay = null;
+                    el.removeEventListener("animationend", onEnd);
+                    el.removeEventListener("webkitAnimationEnd", onEnd);
+                    el.removeEventListener("oanimationend", onEnd);
+                    el.removeEventListener("msAnimationEnd", onEnd);
+                };
+                el.addEventListener("animationend", onEnd);
+                el.addEventListener("webkitAnimationEnd", onEnd);
+                el.addEventListener("oanimationend", onEnd);
+                el.addEventListener("msAnimationEnd", onEnd);
+            }
 
-            if (controlledCombatants.some(c => c.id === combatantId)) {
+            const controlledTokens = canvas?.tokens?.controlled ?? [];
+            const controlledCombatants = game?.combat?.combatants?.filter(c => controlledTokens.some(t => c.token?.id === t.id)) ?? [];
+            const combatantId = el?.dataset?.combatantId;
+
+            if (combatantId && controlledCombatants.some(c => c.id === combatantId)) {
                 const combatant = controlledCombatants.find(c => c.id === combatantId);
                 const token = controlledTokens.find(t => t.id === combatant.token.id);
                 const borderColor = PIXI.utils.hex2string(token._getBorderColor());
-                $element.css("border-color", borderColor);
+                if (el) el.style.borderColor = borderColor;
             }
-           
-            const newElement = $element[0].outerHTML;
+
+            const newElement = el?.outerHTML ?? element;
 
             // add the element in the new position
             this.splide.add(newElement, index);
@@ -1036,32 +1059,28 @@ export default class CombatCarousel extends Application {
      * Toggles visibility of the carousel
      */
     async toggleVisibility(forceCollapse=false) {
-        const collapseIndicator = ui.controls.element.find("i.collapse-indicator");
+        const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
+        const indicator = controlsRoot?.querySelector("i.collapse-indicator");
+
+        const el = this.element?.jquery ? this.element[0] : this.element;
+        if (!el) return true;
+
+        const setIndicator = (dir) => {
+            if (!indicator) return;
+            indicator.classList.remove("fa-caret-down", "fa-caret-up");
+            indicator.classList.add(dir === "up" ? "fa-caret-up" : "fa-caret-down");
+        };
 
         return new Promise(resolve => {
-            const $el = this.element;
-
             if (forceCollapse) {
-                $el.slideUp(200, () => {
-                    collapseIndicator.removeClass("fa-caret-down").addClass("fa-caret-up");
-                    this._collapsed = true;
-                });
-
-                return resolve(true);
+                if (this.element?.slideUp) this.element.slideUp(200, () => { setIndicator("down"); this._collapsed = true; resolve(true); });
+                else { el.style.display = "none"; setIndicator("down"); this._collapsed = true; resolve(true); }
+                return;
             }
 
-            $el.slideToggle(200, () => {
-                const currentDirection = collapseIndicator.hasClass("fa-caret-down") ? "down" : "up";
-                const newDirection = currentDirection ? (currentDirection === "down" ? "up" : "down") : null;
-
-                if(newDirection) {
-                    collapseIndicator.removeClass(`fa-caret-${currentDirection}`).addClass(`fa-caret-${newDirection}`)
-                }
-
-                this._collapsed = !this._collapsed;
-            });
-
-            return resolve(true);
+            const hidden = getComputedStyle(el).display === "none";
+            if (this.element?.slideToggle) this.element.slideToggle(200, () => { setIndicator(hidden ? "up" : "down"); this._collapsed = !hidden; resolve(true); });
+            else { el.style.display = hidden ? "" : "none"; setIndicator(hidden ? "up" : "down"); this._collapsed = !hidden; resolve(true); }
         });
     }
 
@@ -1070,15 +1089,11 @@ export default class CombatCarousel extends Application {
      */
     async expand() {
         return new Promise(resolve => {
-            // const $splide = $(this.splide.root);
-            const $el = this.element;
-            const collapseIndicator = ui.controls.element.find("i.collapse-indicator");
-
-            $el.slideDown(200, () => {
-                this._collapsed = false;
-                collapseIndicator.removeClass("fa-caret-down").addClass("fa-caret-up");
-                resolve(true);
-            });        
+            const el = this.element?.jquery ? this.element[0] : this.element;
+            const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
+            const indicator = controlsRoot?.querySelector("i.collapse-indicator");
+            if (this.element?.slideDown) this.element.slideDown(200, () => { this._collapsed = false; indicator?.classList?.remove("fa-caret-down"); indicator?.classList?.add("fa-caret-up"); resolve(true); });
+            else { if (el) el.style.display = ""; this._collapsed = false; indicator?.classList?.remove("fa-caret-down"); indicator?.classList?.add("fa-caret-up"); resolve(true); }
         });
     }
 
@@ -1087,15 +1102,11 @@ export default class CombatCarousel extends Application {
      */
     async collapse() {
         return new Promise(resolve => {
-            // const $splide = $(this.splide.root);
-            const $el = this.element;
-            const collapseIndicator = ui.controls.element.find("i.collapse-indicator");
-
-            $el.slideUp(200, () => {
-                this._collapsed = true;
-                collapseIndicator.removeClass("fa-caret-up").addClass("fa-caret-down");
-                resolve(true);
-            });
+            const el = this.element?.jquery ? this.element[0] : this.element;
+            const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
+            const indicator = controlsRoot?.querySelector("i.collapse-indicator");
+            if (this.element?.slideUp) this.element.slideUp(200, () => { this._collapsed = true; indicator?.classList?.remove("fa-caret-up"); indicator?.classList?.add("fa-caret-down"); resolve(true); });
+            else { if (el) el.style.display = "none"; this._collapsed = true; indicator?.classList?.remove("fa-caret-up"); indicator?.classList?.add("fa-caret-down"); resolve(true); }
         });
     }
 
@@ -1118,9 +1129,9 @@ export default class CombatCarousel extends Application {
      * Gets the current combat state of the toggle icon
      */
     getToggleIconState() {
-        const $icon = this.element.find("img.carousel-icon").first();
-        const img = $icon.attr("src");
-
+        const el = this.element?.jquery ? this.element[0] : this.element;
+        const icon = el?.querySelector?.("img.carousel-icon");
+        const img = icon?.getAttribute?.("src");
         return getKeyByValue(CAROUSEL_ICONS, img);
     }
 
@@ -1129,11 +1140,12 @@ export default class CombatCarousel extends Application {
      * @param {String} combatState
      */
     setToggleIcon(combatState=null) {
-        const $icon = ui.controls.element.find(".carousel-icon").first();
-        const img = $icon.attr("src");
+        const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
+        const icon = controlsRoot?.querySelector?.(".carousel-icon");
+        const img = icon?.getAttribute?.("src");
         combatState = combatState ? combatState : CombatCarousel.getCombatState(game?.combat);
 
-        $icon.attr("src", CAROUSEL_ICONS[combatState]);
+        if (icon) icon.setAttribute("src", CAROUSEL_ICONS[combatState]);
     }
 
     /**
@@ -1209,7 +1221,7 @@ export default class CombatCarousel extends Application {
      */
     setPosition({left, top, width, height, scale}={}) {
         //if ( !this.popOut ) return; // Only configure position for popout apps
-        const el = this.element[0];
+        const el = this.element?.jquery ? this.element[0] : this.element;
         const p = this.position;
         const pop = this.popOut;
         const styles = window.getComputedStyle(el);
@@ -1303,8 +1315,12 @@ export default class CombatCarousel extends Application {
      */
     _getAvailableWidth({sidebarWidth=null, left=null}={}) {
         // If no sidebarWidth is provided, calculate its width including any positional buffer, if the sidebar is visible
-        sidebarWidth = sidebarWidth ?? ui.sidebar.element.is(":hidden") ? 0 : (ui.sidebar.element.outerWidth() + (window.innerWidth - ui.sidebar.element.offset().left - ui.sidebar.element.outerWidth()) + 5);
-        const carouselLeft = left ?? this.element.offset().left;
+        const sidebarEl = ui?.sidebar?.element?.jquery ? ui.sidebar.element[0] : ui?.sidebar?.element;
+        const hidden = sidebarEl ? (getComputedStyle(sidebarEl).display === "none") : true;
+        const sidebarWidthPx = hidden ? 0 : (sidebarEl.getBoundingClientRect().width + (window.innerWidth - sidebarEl.getBoundingClientRect().right) + 5);
+        sidebarWidth = sidebarWidth ?? sidebarWidthPx;
+        const el = this.element?.jquery ? this.element[0] : this.element;
+        const carouselLeft = left ?? (el?.getBoundingClientRect()?.left ?? 0);
         const availableWidth = Math.floor(window.innerWidth - (carouselLeft + sidebarWidth));
 
         return availableWidth;
@@ -1345,7 +1361,7 @@ export default class CombatCarousel extends Application {
     _setSplidePagination() {
         if (!this.splide) return;
 
-        const width = this.element.outerWidth();
+        const width = (this.element?.jquery ? this.element[0] : this.element)?.getBoundingClientRect()?.width;
         const uiBuffer = 110;
         const slideWidth = 100;
         const numSlides = Number.isFinite(width) ? Math.floor((width - uiBuffer) / slideWidth) : 0;
@@ -1675,16 +1691,17 @@ export default class CombatCarousel extends Application {
      * Set the indicator on the toggle button
      */
     setToggleIconIndicator(state) {
-        const $indicator = ui.controls.element.find("li[data-control='combat-carousel'] i.collapse-indicator");
-        const currentDirection = $indicator.hasClass("fa-caret-down") ? "down" : "up";
-        let newDirection = null;
-
-        if (!state) return;
-        
-        newDirection = state === "open" ? "up" : "down"; 
-
-        if(newDirection && (newDirection !== currentDirection)) {
-            $indicator.removeClass(`fa-caret-${currentDirection}`).addClass(`fa-caret-${newDirection}`)
+        const controlsRoot = ui?.controls?.element?.jquery ? ui.controls.element[0] : ui?.controls?.element;
+        const indicator = controlsRoot?.querySelector("li[data-control='combat-carousel'] i.collapse-indicator");
+        if (!state || !indicator) return;
+        const currentDown = indicator.classList.contains("fa-caret-down");
+        const desiredUp = state === "open";
+        if (desiredUp) {
+            indicator.classList.remove("fa-caret-down");
+            indicator.classList.add("fa-caret-up");
+        } else {
+            indicator.classList.remove("fa-caret-up");
+            indicator.classList.add("fa-caret-down");
         }
     }
 

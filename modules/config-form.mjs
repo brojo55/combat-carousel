@@ -5,6 +5,11 @@
 
 import { NAME, SETTING_KEYS, TEMPLATE_PATH } from "./config.mjs";
 
+// v13+ compatibility helpers
+const FU = foundry?.utils ?? {};
+const mergeObject = FU.mergeObject ?? (globalThis.mergeObject || ((a,b)=>Object.assign({}, a, b)));
+const duplicate = FU.duplicate ?? FU.deepClone ?? (globalThis.duplicate || ((o)=>JSON.parse(JSON.stringify(o))));
+
 /**
  * A form-app for setting the icons and properties to use in the Combat Carousel Overlay
  * @extends FormApplication

@@ -15,6 +15,14 @@ import { getKeyByValue } from "./util.mjs";
  * Wrapper to call settings registration
  */
 export default function registerSettings() {
+    // v13+ compatibility helpers
+    const FU = foundry?.utils ?? {};
+    const getControlsRoot = () => {
+        const el = ui?.controls?.element;
+        if (!el) return null;
+        return el.jquery ? el[0] : el;
+    };
+    const queryControls = (selector) => getControlsRoot()?.querySelector(selector);
 
     /* -------------------------------------------------------------------------- */
     /*                                    Menus                                   */
@@ -58,9 +66,9 @@ export default function registerSettings() {
 
             if (s === false) {
                 if (ui.combatCarousel?.rendered) ui.combatCarousel.close();
-                const controlsHtml = ui.controls.element;
-                const ccButton = controlsHtml.find("li[data-control='combat-carousel']");
-                ccButton.remove();
+                const root = getControlsRoot();
+                const ccButton = root?.querySelector("li[data-control='combat-carousel']");
+                if (ccButton) ccButton.remove();
             }
         }
     });
@@ -100,7 +108,9 @@ export default function registerSettings() {
         onChange: async s => {
             if (ui.combatCarousel?.rendered) {
                 await ui.combatCarousel.render(true);
-                ui.combatCarousel.element.addClass(s);
+                const el = ui.combatCarousel.element;
+                if (el?.jquery) el.addClass(s);
+                else el?.classList?.add(s);
             }
         }
     });
