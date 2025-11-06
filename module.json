@@ -81,7 +81,5 @@
   "compatibility": {
     "minimum": "10.275",
     "verified": "13.350"
-  },
-  "name": "combat-carousel",
-  "minimumCoreVersion": "10.275"
+  }
 }
