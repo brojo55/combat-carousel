@@ -17,6 +17,8 @@ export default class AboutApp extends FormApplication {
      * @override
      */
     static get defaultOptions() {
+        const FU = foundry?.utils ?? {};
+        const mergeObject = FU.mergeObject ?? (globalThis.mergeObject || ((a,b)=>Object.assign({}, a, b)));
         return mergeObject(super.defaultOptions, {
             id: "combat-carousel-about",
             title: "About Combat Carousel",

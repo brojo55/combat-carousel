@@ -7,6 +7,17 @@
  * Wrapper to call overrides
  */
 export default function overrideMethods() {
+    // Only apply these fragile overrides on pre-v13 cores.
+    // In v13+, SceneNavigation behavior changed and jQuery animations may not exist.
+    try {
+        const gen = game?.release?.generation ?? null;
+        const isPre13 = (typeof gen === "number") ? (gen < 13) : foundry?.utils?.isNewerVersion?.("13", game.version);
+        if (!isPre13) return;
+    } catch (e) {
+        // If version detection fails, do not override to avoid breaking newer cores
+        return;
+    }
+
     SceneNavigation.prototype.expand = sceneNavExpandOverride;
     SceneNavigation.prototype.collapse = sceneNavCollapseOverride;
 }

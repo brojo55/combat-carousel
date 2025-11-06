@@ -20,11 +20,15 @@ export default class FixedDraggable extends Draggable {
     _onDragMouseDown(event) {
         event.preventDefault();
         // Record initial position
+        const el = this.app.element?.jquery ? this.app.element[0] : this.app.element;
+        const rect = el?.getBoundingClientRect?.() ?? {left: 0, top: 0, width: 0, height: 0};
+        const styleLeft = parseInt(el?.style?.left ?? "0");
+        const styleTop = parseInt(el?.style?.top ?? "0");
         const appPosition = {
-            width: this.app.position.width ?? this.app.element.width(),
-            height: this.app.position.height ?? this.app.element.height(),
-            left: this.app.position.left ?? this.app.element.position().left,
-            top: this.app.position.top ?? this.app.element.position().top,
+            width: this.app.position.width ?? rect.width,
+            height: this.app.position.height ?? rect.height,
+            left: this.app.position.left ?? (Number.isFinite(styleLeft) ? styleLeft : rect.left),
+            top: this.app.position.top ?? (Number.isFinite(styleTop) ? styleTop : rect.top),
             scale: this.app.position.scale ?? 1.0
         }
         
