@@ -77,9 +77,14 @@ export default function registerHooks() {
         const enabled = game.settings.get(NAME, SETTING_KEYS.enabled);
         const openOnCreate = game.settings.get(NAME, SETTING_KEYS.openOnCombatCreate);
 
-        if (!enabled || !ui.combatCarousel || (ui.combatCarousel?._collapsed && !openOnCreate)) return;
-        
-        ui.combatCarousel.render(true);
+        if (!enabled || !ui.combatCarousel) return;
+
+        if (openOnCreate) {
+            if (ui.combatCarousel._collapsed) ui.combatCarousel.expand();
+            ui.combatCarousel.render(true);
+        } else if (!ui.combatCarousel._collapsed) {
+            ui.combatCarousel.render(true);
+        }
 
         // If set, collapse the Nav bar
         const collapseNavSetting = game.settings.get(NAME, SETTING_KEYS.collapseNav);
@@ -99,12 +104,18 @@ export default function registerHooks() {
      */
     Hooks.on("updateCombat", (combat, update, options, userId) => {
         const enabled = game.settings.get(NAME, SETTING_KEYS.enabled);
+        const openOnCreate = game.settings.get(NAME, SETTING_KEYS.openOnCombatCreate);
 
-        if (!enabled || ui.combatCarousel?._collapsed) return;
+        if (!enabled || (!openOnCreate && ui.combatCarousel?._collapsed)) return;
 
         //console.log("combat update", {combat, update, options, userId});
 
-        if (getProperty(update, "active") === true || hasProperty(update, "round")) {
+        if (getProperty(update, "active") === true) {
+            if (openOnCreate && ui.combatCarousel._collapsed) ui.combatCarousel.expand();
+            return ui.combatCarousel.render(true);
+        }
+
+        if (hasProperty(update, "round")) {
             return ui.combatCarousel.render(true);
         }
 

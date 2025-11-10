@@ -112,12 +112,12 @@ export default function registerSettings() {
     game.settings.register(NAME, SETTING_KEYS.openOnCombatCreate, {
         name: "COMBAT_CAROUSEL.SETTINGS.OpenOnCombatCreateN",
         hint: "COMBAT_CAROUSEL.SETTINGS.OpenOnCombatCreateH",
-        scope: "client",
+        scope: "world",
         type: Boolean,
-        default: false,
+        default: true,
         config: true,
         onChange: s => {
-
+            // No-op; hook handlers react on combat create/update
         }
     });
 
